@@ -2,8 +2,11 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
+  ConnectedSocket,
+  MessageBody,
   WebSocketGateway,
   WebSocketServer,
+  SubscribeMessage,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
@@ -43,9 +46,21 @@ export class SocketGateway
     this.server.to(`store:${storeId}`).emit(event, data);
   }
 
-  // Example of how a client would join a room
-  handleJoinRoom(client: Socket, room: string) {
-    client.join(room);
-    client.emit('joinedRoom', room);
+  @SubscribeMessage('join')
+  handleJoinRoom(
+    @MessageBody()
+    payload: {
+      tenantId?: string;
+      storeId?: string;
+    },
+    @ConnectedSocket() client: Socket,
+  ) {
+    if (payload?.tenantId) {
+      client.join(`tenant:${payload.tenantId}`);
+    }
+    if (payload?.storeId) {
+      client.join(`store:${payload.storeId}`);
+    }
+    client.emit('joinedRoom', payload);
   }
 }

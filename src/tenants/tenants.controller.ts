@@ -14,6 +14,8 @@ import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 
 @ApiTags('Tenants')
 @Controller('tenants')
@@ -25,6 +27,14 @@ export class TenantsController {
   @ApiOperation({ summary: 'Handle incoming Stripe webhooks' })
   handleStripeWebhook(@Body() event: any) {
     return this.tenantsService.handleStripeWebhook(event);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('me/plan')
+  @ApiOperation({ summary: 'Get subscription/plan status for current tenant' })
+  getMyPlan(@CurrentUser() user: AuthenticatedUser) {
+    return this.tenantsService.findOne(user.tenantId);
   }
 
   @UseGuards(JwtAuthGuard)

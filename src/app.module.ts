@@ -13,6 +13,9 @@ import { ChecksModule } from './checks/checks.module';
 import { ReportsModule } from './reports/reports.module';
 import { SocketModule } from './socket/socket.module';
 import { TenantsModule } from './tenants/tenants.module';
+import { StoresModule } from './stores/stores.module';
+import { PrintingModule } from './printing/printing.module';
+import { LogsModule } from './logs/logs.module';
 
 @Module({
   imports: [
@@ -41,6 +44,9 @@ import { TenantsModule } from './tenants/tenants.module';
     ReportsModule,
     SocketModule,
     TenantsModule,
+    StoresModule,
+    PrintingModule,
+    LogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

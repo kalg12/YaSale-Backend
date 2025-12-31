@@ -5,6 +5,7 @@ export type AuthenticatedUser = {
   tenantId: string;
   role: UserRole;
   storeIds: string[];
+  activeStoreId?: string;
   iat?: number;
   exp?: number;
 };
@@ -16,6 +17,7 @@ export class UserProfileResponse {
   pin: string; // Note: In production, never expose PINs
   role: UserRole;
   isActive: boolean;
+  activeStoreId?: string;
   stores: Array<{
     storeId: string;
   }>;

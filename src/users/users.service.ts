@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +11,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from '../entities/user.entity';
 import { UserStore } from '../entities/user-store.entity';
 import { Store } from '../entities/store.entity';
+import { Tenant } from '../entities/tenant.entity';
 
 @Injectable()
 export class UsersService {
@@ -17,10 +22,39 @@ export class UsersService {
     private readonly userStoreRepository: Repository<UserStore>,
     @InjectRepository(Store)
     private readonly storeRepository: Repository<Store>,
+    @InjectRepository(Tenant)
+    private readonly tenantRepository: Repository<Tenant>,
   ) {}
+
+  private ensureTenantIsActive(tenant: Tenant) {
+    const now = new Date();
+    if (
+      tenant.subscriptionStatus !== 'ACTIVE' &&
+      tenant.subscriptionStatus !== 'TRIALING'
+    ) {
+      throw new ForbiddenException('Tenant subscription is not active');
+    }
+    if (
+      tenant.subscriptionStatus === 'TRIALING' &&
+      tenant.trialEndsAt &&
+      tenant.trialEndsAt.getTime() < now.getTime()
+    ) {
+      throw new ForbiddenException('Tenant trial has expired');
+    }
+  }
 
   async create(tenantId: string, createUserDto: CreateUserDto): Promise<User> {
     const { name, pin, role, storeIds } = createUserDto;
+    const tenant = await this.tenantRepository.findOneBy({ id: tenantId });
+    if (!tenant) {
+      throw new NotFoundException(`Tenant with ID '${tenantId}' not found`);
+    }
+    this.ensureTenantIsActive(tenant);
+
+    const userCount = await this.userRepository.count({ where: { tenantId } });
+    if (userCount >= tenant.maxUsers) {
+      throw new ForbiddenException('User limit reached for current plan');
+    }
     const hashedPassword = await bcrypt.hash(pin, 10);
 
     // Verify stores exist
@@ -36,6 +70,7 @@ export class UsersService {
       pin: hashedPassword,
       role,
       tenantId,
+      activeStoreId: storeIds[0],
     });
 
     const savedUser = await this.userRepository.save(user);
@@ -59,6 +94,7 @@ export class UsersService {
         id: true,
         name: true,
         role: true,
+        activeStoreId: true,
         stores: {
           id: true,
           store: {
@@ -78,6 +114,7 @@ export class UsersService {
         id: true,
         name: true,
         role: true,
+        activeStoreId: true,
         stores: {
           id: true,
           store: {
@@ -120,6 +157,9 @@ export class UsersService {
       });
       if (stores.length !== storeIds.length) {
         throw new NotFoundException('One or more stores not found');
+      }
+      if (!user.activeStoreId || !storeIds.includes(user.activeStoreId)) {
+        user.activeStoreId = storeIds[0];
       }
       const userStores = stores.map((store) =>
         this.userStoreRepository.create({

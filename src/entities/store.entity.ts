@@ -13,6 +13,9 @@ import { UserStore } from './user-store.entity';
 import { Product } from './product.entity';
 import { Order } from './order.entity';
 import { Check } from './check.entity';
+import { PrinterConfig } from './printer-config.entity';
+import { PrintJob } from './print-job.entity';
+import { TipLog } from './tip-log.entity';
 
 @Entity('stores')
 @Index(['tenantId'])
@@ -48,4 +51,13 @@ export class Store {
 
   @OneToMany(() => Check, (check) => check.store)
   checks: Check[];
+
+  @OneToMany(() => PrinterConfig, (printer) => printer.store)
+  printerConfigs: PrinterConfig[];
+
+  @OneToMany(() => PrintJob, (job) => job.store)
+  printJobs: PrintJob[];
+
+  @OneToMany(() => TipLog, (tipLog) => tipLog.store)
+  tipLogs: TipLog[];
 }

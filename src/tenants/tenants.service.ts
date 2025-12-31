@@ -13,7 +13,13 @@ export class TenantsService {
   ) {}
 
   create(createTenantDto: CreateTenantDto): Promise<Tenant> {
-    const tenant = this.tenantsRepository.create(createTenantDto);
+    const trialEndsAt = new Date();
+    trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+    const tenant = this.tenantsRepository.create({
+      trialEndsAt,
+      subscriptionStatus: 'TRIALING',
+      ...createTenantDto,
+    });
     return this.tenantsRepository.save(tenant);
   }
 

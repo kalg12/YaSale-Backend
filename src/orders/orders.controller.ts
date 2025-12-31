@@ -20,6 +20,7 @@ import {
 } from '@nestjs/swagger';
 import { OrderStatus } from '../entities/order.entity';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { AddOrderItemsDto } from './dto/add-order-items.dto';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -47,6 +48,24 @@ export class OrdersController {
   ) {
     // TODO: Validate that user has access to this storeId
     return this.ordersService.getKitchenQueue(user.tenantId, storeId);
+  }
+
+  @Post(':id/items')
+  @ApiOperation({
+    summary: 'Add items to an existing order (reopen flow while dining)',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  addItems(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() addOrderItemsDto: AddOrderItemsDto,
+  ) {
+    return this.ordersService.addItems(
+      user.tenantId,
+      user.sub,
+      id,
+      addOrderItemsDto,
+    );
   }
 
   @Patch(':id/start')

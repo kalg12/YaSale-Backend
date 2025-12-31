@@ -18,6 +18,8 @@ import {
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { TipsQueryDto } from './dto/tips-query.dto';
+import { TipLog } from '../entities/tip-log.entity';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
@@ -44,5 +46,14 @@ export class ReportsController {
     @Query() query: SalesReportQueryDto,
   ) {
     return this.reportsService.getSalesReport(user.tenantId, query);
+  }
+
+  @Get('tips')
+  @ApiOperation({ summary: 'Get tip history filtered by store/user/date' })
+  getTips(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: TipsQueryDto,
+  ): Promise<TipLog[]> {
+    return this.reportsService.getTipsHistory(user.tenantId, query);
   }
 }

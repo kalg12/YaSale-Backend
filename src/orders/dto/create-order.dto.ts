@@ -11,7 +11,7 @@ import {
 import { Type } from 'class-transformer';
 import { OrderType } from '../../entities/order.entity';
 
-class SelectedVariantDto {
+export class SelectedVariantDto {
   @IsUUID()
   variantGroupId: string;
 
@@ -19,7 +19,7 @@ class SelectedVariantDto {
   optionId: string;
 }
 
-class OrderItemDto {
+export class OrderItemDto {
   @IsUUID()
   productId: string;
 

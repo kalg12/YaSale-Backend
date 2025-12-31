@@ -10,6 +10,7 @@ import {
   Unique,
 } from 'typeorm';
 import { Tenant } from './tenant.entity';
+import { Store } from './store.entity';
 import { Order } from './order.entity';
 import { Check } from './check.entity';
 import { UserStore } from './user-store.entity';
@@ -45,6 +46,9 @@ export class User {
   @Column()
   tenantId: string;
 
+  @Column({ nullable: true })
+  activeStoreId?: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
@@ -55,6 +59,9 @@ export class User {
     onDelete: 'CASCADE',
   })
   tenant: Tenant;
+
+  @ManyToOne(() => Store, { nullable: true })
+  activeStore?: Store;
 
   @OneToMany(() => UserStore, (userStore) => userStore.user)
   stores: UserStore[];

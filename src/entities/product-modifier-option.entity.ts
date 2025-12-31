@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { ProductModifierGroup } from './product-modifier-group.entity';
+import { ModifierType } from './order-item-modifier.entity';
 
 @Entity('product_modifier_options')
 @Index(['modifierGroupId'])
@@ -20,6 +21,13 @@ export class ProductModifierOption {
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   priceDelta: number;
+
+  @Column({
+    type: 'enum',
+    enum: ModifierType,
+    default: ModifierType.ADD,
+  })
+  type: ModifierType;
 
   @Column()
   modifierGroupId: string;

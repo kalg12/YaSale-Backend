@@ -1,13 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { CreateCheckDto } from './dto/create-check.dto';
 import { AddOrderToCheckDto } from './dto/add-order-to-check.dto';
 import { CloseCheckDto } from './dto/close-check.dto';
 import { Check, CheckStatus } from '../entities/check.entity';
 import { SocketGateway } from '../socket/socket.gateway';
-import { Order } from '../entities/order.entity';
+import { Order, OrderStatus } from '../entities/order.entity';
 import { CheckOrder } from '../entities/check-order.entity';
+import { TipLog } from '../entities/tip-log.entity';
 
 @Injectable()
 export class ChecksService {
@@ -18,6 +19,8 @@ export class ChecksService {
     private readonly ordersRepository: Repository<Order>,
     @InjectRepository(CheckOrder)
     private readonly checkOrdersRepository: Repository<CheckOrder>,
+    @InjectRepository(TipLog)
+    private readonly tipLogsRepository: Repository<TipLog>,
     private readonly socketGateway: SocketGateway,
     private readonly entityManager: EntityManager,
   ) {}
@@ -103,6 +106,7 @@ export class ChecksService {
 
     const check = await this.checksRepository.findOne({
       where: { id: checkId, store: { tenantId } },
+      relations: ['orders', 'orders.order'],
     });
 
     if (!check) {
@@ -117,6 +121,23 @@ export class ChecksService {
     check.paidAt = new Date();
 
     const updatedCheck = await this.checksRepository.save(check);
+
+    const orderIds = check.orders?.map((o) => o.orderId) ?? [];
+    if (orderIds.length > 0) {
+      await this.ordersRepository.update(
+        { id: In(orderIds) },
+        { status: OrderStatus.COMPLETED },
+      );
+    }
+
+    if (tip > 0) {
+      await this.tipLogsRepository.save({
+        tenantId,
+        storeId: check.storeId,
+        userId: check.waiterId,
+        amount: tip,
+      });
+    }
 
     this.socketGateway.emitToStore(check.storeId, 'check.paid', updatedCheck);
 
