@@ -4,6 +4,7 @@ import { PinLoginDto } from './dto/pin-login.dto';
 import { PinLoginResponseDto } from './dto/pin-login-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { SelectStoreDto } from './dto/select-store.dto';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import type {
   AuthenticatedUser,
@@ -31,5 +32,18 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
   ): Promise<UserProfileResponse> {
     return await this.authService.getUserProfile(user.sub);
+  }
+
+  @Post('select-store')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Select active store for current user and refresh JWT',
+  })
+  async selectStore(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() selectStoreDto: SelectStoreDto,
+  ): Promise<PinLoginResponseDto> {
+    return this.authService.selectStore(user.sub, user.tenantId, selectStoreDto);
   }
 }

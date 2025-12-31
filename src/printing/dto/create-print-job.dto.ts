@@ -2,7 +2,8 @@ import { IsOptional, IsUUID } from 'class-validator';
 
 export class CreatePrintJobDto {
   @IsUUID()
-  storeId: string;
+  @IsOptional()
+  storeId?: string;
 
   @IsUUID()
   @IsOptional()

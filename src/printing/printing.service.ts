@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreatePrinterConfigDto } from './dto/create-printer-config.dto';
@@ -7,6 +12,7 @@ import { CreatePrintJobDto } from './dto/create-print-job.dto';
 import { PrinterConfig } from '../entities/printer-config.entity';
 import { PrintJob, PrintJobStatus } from '../entities/print-job.entity';
 import { Store } from '../entities/store.entity';
+import { Order } from '../entities/order.entity';
 import { ClientProxy } from '@nestjs/microservices';
 
 @Injectable()
@@ -18,6 +24,8 @@ export class PrintingService {
     private readonly printJobsRepository: Repository<PrintJob>,
     @InjectRepository(Store)
     private readonly storesRepository: Repository<Store>,
+    @InjectRepository(Order)
+    private readonly ordersRepository: Repository<Order>,
     @Inject('PRINTING_SERVICE') private readonly printingClient: ClientProxy,
   ) {}
 
@@ -29,6 +37,15 @@ export class PrintingService {
       throw new NotFoundException('Store not found for this tenant');
     }
     return store;
+  }
+
+  private async findDefaultPrinter(
+    storeId: string,
+  ): Promise<PrinterConfig | null> {
+    return this.printerConfigsRepository.findOne({
+      where: { storeId, isEnabled: true },
+      order: { createdAt: 'ASC' },
+    });
   }
 
   async createConfig(tenantId: string, dto: CreatePrinterConfigDto) {
@@ -81,6 +98,10 @@ export class PrintingService {
   }
 
   async enqueueJob(tenantId: string, dto: CreatePrintJobDto) {
+    if (!dto.storeId) {
+      throw new BadRequestException('storeId is required');
+    }
+
     await this.validateStoreOwnership(tenantId, dto.storeId);
     if (dto.printerConfigId) {
       const config = await this.printerConfigsRepository.findOne({
@@ -94,6 +115,28 @@ export class PrintingService {
 
     const job = this.printJobsRepository.create({
       ...dto,
+      status: PrintJobStatus.QUEUED,
+      attempts: 0,
+    });
+    const saved = await this.printJobsRepository.save(job);
+    this.printingClient.emit('print_job_created', saved);
+    return saved;
+  }
+
+  async reprintOrder(tenantId: string, orderId: string) {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId, store: { tenantId } },
+      relations: ['store'],
+    });
+    if (!order) {
+      throw new NotFoundException(`Order with ID '${orderId}' not found`);
+    }
+
+    const printer = await this.findDefaultPrinter(order.storeId);
+    const job = this.printJobsRepository.create({
+      storeId: order.storeId,
+      orderId: order.id,
+      printerConfigId: printer?.id,
       status: PrintJobStatus.QUEUED,
       attempts: 0,
     });

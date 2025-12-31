@@ -45,7 +45,8 @@ export class OrderItemDto {
 
 export class CreateOrderDto {
   @IsUUID()
-  storeId: string;
+  @IsOptional()
+  storeId?: string;
 
   @IsEnum(OrderType)
   type: OrderType;

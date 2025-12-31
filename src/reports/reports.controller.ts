@@ -19,6 +19,7 @@ import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { TipsQueryDto } from './dto/tips-query.dto';
+import { DashboardLiveResponseDto } from './dto/dashboard-live-response.dto';
 import { TipLog } from '../entities/tip-log.entity';
 
 @ApiTags('Reports')
@@ -55,5 +56,15 @@ export class ReportsController {
     @Query() query: TipsQueryDto,
   ): Promise<TipLog[]> {
     return this.reportsService.getTipsHistory(user.tenantId, query);
+  }
+
+  @Get('dashboard-live/:storeId')
+  @ApiOperation({ summary: 'Live dashboard metrics for today' })
+  @ApiParam({ name: 'storeId', description: 'Store ID' })
+  getDashboardLive(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+  ): Promise<DashboardLiveResponseDto> {
+    return this.reportsService.getDashboardLive(user.tenantId, storeId);
   }
 }

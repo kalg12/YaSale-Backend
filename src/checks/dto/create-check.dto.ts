@@ -1,6 +1,7 @@
-import { IsUUID } from 'class-validator';
+import { IsOptional, IsUUID } from 'class-validator';
 
 export class CreateCheckDto {
   @IsUUID()
-  storeId: string;
+  @IsOptional()
+  storeId?: string;
 }

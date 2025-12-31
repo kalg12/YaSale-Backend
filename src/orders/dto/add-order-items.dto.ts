@@ -2,7 +2,7 @@ import { IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderItemDto } from './create-order.dto';
 
-export class AddOrderItemsDto {
+export class AddItemsToOrderDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemDto)

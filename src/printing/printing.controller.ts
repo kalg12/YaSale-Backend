@@ -9,6 +9,7 @@ import {
   Post,
   Query,
   UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -48,7 +49,11 @@ export class PrintingController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('storeId') storeId?: string,
   ) {
-    return this.printingService.listConfigs(user.tenantId, storeId);
+    const targetStoreId = storeId || user.activeStoreId;
+    if (!targetStoreId) {
+      throw new BadRequestException('storeId is required');
+    }
+    return this.printingService.listConfigs(user.tenantId, targetStoreId);
   }
 
   @Patch('configs/:id')
@@ -78,6 +83,12 @@ export class PrintingController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreatePrintJobDto,
   ) {
+    if (!dto.storeId) {
+      if (!user.activeStoreId) {
+        throw new BadRequestException('storeId is required');
+      }
+      dto.storeId = user.activeStoreId;
+    }
     return this.printingService.enqueueJob(user.tenantId, dto);
   }
 
@@ -98,6 +109,20 @@ export class PrintingController {
     @CurrentUser() user: AuthenticatedUser,
     @Query('storeId') storeId?: string,
   ) {
-    return this.printingService.listJobs(user.tenantId, storeId);
+    const targetStoreId = storeId || user.activeStoreId;
+    if (!targetStoreId) {
+      throw new BadRequestException('storeId is required');
+    }
+    return this.printingService.listJobs(user.tenantId, targetStoreId);
+  }
+
+  @Post('reprint/order/:orderId')
+  @ApiOperation({ summary: 'Reprint an order to the active printer of the store' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  reprintOrder(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('orderId', ParseUUIDPipe) orderId: string,
+  ) {
+    return this.printingService.reprintOrder(user.tenantId, orderId);
   }
 }

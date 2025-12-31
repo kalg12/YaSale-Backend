@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { endOfDay, startOfDay } from 'date-fns';
 import { SalesReportQueryDto } from './dto/sales-report-query.dto';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
 import { Check, CheckStatus } from '../entities/check.entity';
 import { TipLog } from '../entities/tip-log.entity';
 import { TipsQueryDto } from './dto/tips-query.dto';
+import { Order, OrderStatus } from '../entities/order.entity';
+import { OrderItem } from '../entities/order-item.entity';
+import { DashboardLiveResponseDto } from './dto/dashboard-live-response.dto';
 
 /* These interfaces, `DashboardRawResult` and `TipsRawResult`, are defining the structure of the raw
 results that will be returned from database queries in the `ReportsService` class. */
@@ -29,6 +32,10 @@ export class ReportsService {
     private readonly checksRepository: Repository<Check>,
     @InjectRepository(TipLog)
     private readonly tipLogsRepository: Repository<TipLog>,
+    @InjectRepository(Order)
+    private readonly ordersRepository: Repository<Order>,
+    @InjectRepository(OrderItem)
+    private readonly orderItemsRepository: Repository<OrderItem>,
   ) {}
 
   async getDashboard(
@@ -120,5 +127,87 @@ export class ReportsService {
     qb.orderBy('tip.createdAt', 'DESC');
 
     return qb.getMany();
+  }
+
+  async getDashboardLive(
+    tenantId: string,
+    storeId: string,
+  ): Promise<DashboardLiveResponseDto> {
+    const startDate = startOfDay(new Date());
+    const endDate = endOfDay(new Date());
+
+    const activeOrdersCount = await this.ordersRepository.count({
+      where: {
+        storeId,
+        store: { tenantId },
+        status: In([OrderStatus.PENDING, OrderStatus.IN_PROGRESS]),
+      },
+    });
+
+    const readyOrdersCount = await this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoin('order.checks', 'checkOrders')
+      .leftJoin('checkOrders.check', 'check')
+      .leftJoin('order.store', 'store')
+      .where('order.storeId = :storeId', { storeId })
+      .andWhere('store.tenantId = :tenantId', { tenantId })
+      .andWhere('order.status = :status', { status: OrderStatus.READY })
+      .andWhere('(check.id IS NULL OR check.status != :paidStatus)', {
+        paidStatus: CheckStatus.PAID,
+      })
+      .getCount();
+
+    const openChecksCount = await this.checksRepository.count({
+      where: {
+        storeId,
+        store: { tenantId },
+        status: CheckStatus.OPEN,
+      },
+    });
+
+    const salesAgg = await this.checksRepository
+      .createQueryBuilder('check')
+      .select('SUM(check.total)', 'salesTodayTotal')
+      .addSelect('SUM(check.tip)', 'tipsTodayTotal')
+      .addSelect('AVG(check.total)', 'avgTicketToday')
+      .innerJoin('check.store', 'store')
+      .where('store.tenantId = :tenantId', { tenantId })
+      .andWhere('check.storeId = :storeId', { storeId })
+      .andWhere('check.status = :status', { status: CheckStatus.PAID })
+      .andWhere('check.paidAt >= :startDate', { startDate })
+      .andWhere('check.paidAt <= :endDate', { endDate })
+      .getRawOne();
+
+    const topProductsToday = await this.orderItemsRepository
+      .createQueryBuilder('item')
+      .select('item.productId', 'productId')
+      .addSelect('product.name', 'name')
+      .addSelect('SUM(item.quantity)', 'quantity')
+      .innerJoin('item.order', 'order')
+      .innerJoin('order.store', 'store')
+      .innerJoin('item.product', 'product')
+      .where('order.storeId = :storeId', { storeId })
+      .andWhere('store.tenantId = :tenantId', { tenantId })
+      .andWhere('order.createdAt >= :startDate', { startDate })
+      .andWhere('order.createdAt <= :endDate', { endDate })
+      .groupBy('item.productId')
+      .addGroupBy('product.name')
+      .orderBy('quantity', 'DESC')
+      .limit(5)
+      .getRawMany();
+
+    return {
+      activeOrdersCount,
+      readyOrdersCount,
+      openChecksCount,
+      salesTodayTotal: parseFloat(salesAgg?.salesTodayTotal ?? '0'),
+      tipsTodayTotal: parseFloat(salesAgg?.tipsTodayTotal ?? '0'),
+      avgTicketToday: parseFloat(salesAgg?.avgTicketToday ?? '0'),
+      topProductsToday: topProductsToday.map((p) => ({
+        productId: p.productId,
+        name: p.name,
+        quantity: Number(p.quantity),
+      })),
+    };
   }
 }

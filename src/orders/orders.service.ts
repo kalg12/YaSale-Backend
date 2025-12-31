@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -9,13 +14,14 @@ import { SocketGateway } from '../socket/socket.gateway';
 import { Product } from '../entities/product.entity';
 import { OrderItem } from '../entities/order-item.entity';
 import { Store } from '../entities/store.entity';
+import { CheckStatus } from '../entities/check.entity';
 import { ProductVariantOption } from '../entities/product-variant-option.entity';
 import { ProductModifierOption } from '../entities/product-modifier-option.entity';
 import {
   OrderItemModifier,
   ModifierType as OrderModifierType,
 } from '../entities/order-item-modifier.entity';
-import { AddOrderItemsDto } from './dto/add-order-items.dto';
+import { AddItemsToOrderDto } from './dto/add-order-items.dto';
 
 // Local type to avoid unsafe access warnings when handling raw DTO payloads
 // coming from request bodies.
@@ -199,15 +205,22 @@ export class OrdersService {
     tenantId: string,
     waiterId: string,
     createOrderDto: CreateOrderDto,
+    userStoreIds: string[],
   ): Promise<Order> {
     const { storeId, items, ...orderData } = createOrderDto;
 
+    if (!storeId) {
+      throw new ForbiddenException('Store is required');
+    }
     const store = await this.storeRepository.findOneBy({
       id: storeId,
       tenantId,
     });
     if (!store) {
       throw new NotFoundException('Store not found');
+    }
+    if (!userStoreIds.includes(storeId)) {
+      throw new ForbiddenException('User cannot create orders for this store');
     }
 
     const orderNumber = `ORDER-${Math.floor(Math.random() * 10000)}`; // TODO: Implement a more robust order numbering system
@@ -252,7 +265,8 @@ export class OrdersService {
     tenantId: string,
     waiterId: string,
     orderId: string,
-    addOrderItemsDto: AddOrderItemsDto,
+    addOrderItemsDto: AddItemsToOrderDto,
+    userStoreIds: string[],
   ): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId, store: { tenantId } },
@@ -260,6 +274,10 @@ export class OrdersService {
 
     if (!order) {
       throw new NotFoundException(`Order with ID '${orderId}' not found.`);
+    }
+
+    if (!userStoreIds.includes(order.storeId)) {
+      throw new ForbiddenException('User cannot modify this store');
     }
 
     if (order.status === OrderStatus.CANCELLED) {
@@ -306,19 +324,30 @@ export class OrdersService {
   }
 
   getKitchenQueue(tenantId: string, storeId: string): Promise<Order[]> {
-    return this.ordersRepository.find({
-      where: {
-        storeId,
-        store: { tenantId },
-        status: In([
-          OrderStatus.PENDING,
-          OrderStatus.IN_PROGRESS,
-          OrderStatus.READY,
-        ]),
-      },
-      order: { createdAt: 'ASC' },
-      relations: ['items', 'items.product', 'items.modifiers'],
-    });
+    return this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.product', 'product')
+      .leftJoinAndSelect('items.modifiers', 'modifiers')
+      .leftJoin('order.store', 'store')
+      .leftJoin('order.checks', 'checkOrders')
+      .leftJoin('checkOrders.check', 'check')
+      .where('store.tenantId = :tenantId', { tenantId })
+      .andWhere('order.storeId = :storeId', { storeId })
+      .andWhere(
+        `(order.status IN (:...activeStatuses)) OR (order.status = :completedStatus AND (check.id IS NULL OR check.status != :paidStatus))`,
+        {
+          activeStatuses: [
+            OrderStatus.PENDING,
+            OrderStatus.IN_PROGRESS,
+            OrderStatus.READY,
+          ],
+          completedStatus: OrderStatus.COMPLETED,
+          paidStatus: CheckStatus.PAID,
+        },
+      )
+      .orderBy('order.createdAt', 'ASC')
+      .getMany();
   }
 
   async updateStatus(

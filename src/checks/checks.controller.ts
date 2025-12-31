@@ -6,6 +6,7 @@ import {
   Param,
   UseGuards,
   ParseUUIDPipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { ChecksService } from './checks.service';
 import { CreateCheckDto } from './dto/create-check.dto';
@@ -35,6 +36,12 @@ export class ChecksController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() createCheckDto: CreateCheckDto,
   ) {
+    if (!createCheckDto.storeId) {
+      if (!user.activeStoreId) {
+        throw new BadRequestException('storeId is required');
+      }
+      createCheckDto.storeId = user.activeStoreId;
+    }
     return this.checksService.create(user.tenantId, user.sub, createCheckDto);
   }
 

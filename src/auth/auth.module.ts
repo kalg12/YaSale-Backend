@@ -9,10 +9,11 @@ import { JwtStrategy } from './jwt.strategy';
 import { RolesGuard } from './guards/roles.guard';
 import { User } from '../entities/user.entity';
 import { Tenant } from '../entities/tenant.entity';
+import { UserStore } from '../entities/user-store.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Tenant]),
+    TypeOrmModule.forFeature([User, Tenant, UserStore]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
